@@ -3,6 +3,8 @@
 * Purpose : passing Authentication config object to the configuration
 */
 namespace CyberSource;
+use Dotenv\Dotenv;
+
 require_once __DIR__. DIRECTORY_SEPARATOR .'../vendor/autoload.php';
 
 class ExternalConfiguration
@@ -13,10 +15,11 @@ class ExternalConfiguration
     //initialize variable on constructor
     function __construct()
     {
+        $this->loadEnvConfig();
         $this->authType = "http_signature";//http_signature/jwt
-        $this->merchantID = "testrest";
-        $this->apiKeyID = "08c94330-f618-42a3-b09d-e1e43be5efda";
-        $this->secretKey = "yBJxy6LjM2TmcPGu+GaJrHtkke25fPpUX+UY6/L/1tE=";
+        $this->merchantID = getenv("MERCHANT_ID");
+        $this->apiKeyID = getenv("API_KEY_ID");
+        $this->secretKey = getenv("SECRET_KEY");
 
         // MetaKey configuration [Start]
         $this->useMetaKey = false;
@@ -58,6 +61,11 @@ class ExternalConfiguration
         $this->merchantConfigObject();
         $this->merchantConfigObjectForIntermediateHost();
         $this->jwePEMFileDirectory = "Resources".DIRECTORY_SEPARATOR."NetworkTokenCert.pem";
+    }
+    private function loadEnvConfig()
+    {
+        $dotenv = Dotenv::createUnsafeImmutable(__DIR__.DIRECTORY_SEPARATOR."..");
+        $dotenv->safeLoad();
     }
 
     //creating merchant config object

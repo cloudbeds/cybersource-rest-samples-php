@@ -2,3 +2,5 @@ vendor
 Log
 .idea
 *.log
+/composer.lock
+/.env
