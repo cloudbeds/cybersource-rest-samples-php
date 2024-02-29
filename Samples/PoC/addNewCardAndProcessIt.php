@@ -1,79 +1,16 @@
 <?php
 
+use CyberSource\Model\PtsV2PaymentsPost201Response;
+use CyberSource\Model\Tmsv2customersEmbeddedDefaultPaymentInstrument;
 use Ramsey\Uuid\Uuid;
 
 require_once __DIR__ . DIRECTORY_SEPARATOR . '../../vendor/autoload.php';
 require_once __DIR__ . DIRECTORY_SEPARATOR . '../../Resources/ExternalConfiguration.php';
 
-function CreatePaymentInstrumentCard()
+function run(): void
 {
-
-    /** @var array{\CyberSource\Model\Tmsv2customersEmbeddedDefaultPaymentInstrumentEmbeddedInstrumentIdentifier,string,array<string,string>} $response */
     $response = CreateInstrumentIdentifierCard();
-
     $instrumentIdentifierId = $response[0]->getId();
-    var_dump("Payment instrument identifier: {$instrumentIdentifierId}");
-    $cardArr = [
-        "expirationMonth" => "12",
-        "expirationYear" => "2031",
-        "type" => "visa"
-    ];
-    $card = new CyberSource\Model\Tmsv2customersEmbeddedDefaultPaymentInstrumentCard($cardArr);
-
-    $billToArr = [
-        "firstName" => "John",
-        "lastName" => "Doe",
-        "company" => "Cybersource",
-        "address1" => "1 Market St",
-        "locality" => "San Francisco",
-        "administrativeArea" => "CA",
-        "postalCode" => "94105",
-        "country" => "US",
-        "email" => "test@cybs.com",
-        "phoneNumber" => "4158880000"
-    ];
-    $billTo = new CyberSource\Model\Tmsv2customersEmbeddedDefaultPaymentInstrumentBillTo($billToArr);
-
-    $instrumentIdentifierArr = [
-            "id" => $instrumentIdentifierId
-    ];
-    $instrumentIdentifier = new CyberSource\Model\Tmsv2customersEmbeddedDefaultPaymentInstrumentInstrumentIdentifier($instrumentIdentifierArr);
-
-    $requestObjArr = [
-            "card" => $card,
-            "billTo" => $billTo,
-            "instrumentIdentifier" => $instrumentIdentifier
-    ];
-    $requestObj = new CyberSource\Model\PostPaymentInstrumentRequest($requestObjArr);
-
-    $commonElement = new CyberSource\ExternalConfiguration();
-    $config = $commonElement->ConnectionHost();
-    $merchantConfig = $commonElement->merchantConfigObject();
-
-    $api_client = new CyberSource\ApiClient($config, $merchantConfig);
-    $api_instance = new CyberSource\Api\PaymentInstrumentApi($api_client);
-
-    try {
-        /** @var array{\CyberSource\Model\Tmsv2customersEmbeddedDefaultPaymentInstrument, string, array<string,string>} $apiResponse */
-        $apiResponse = $api_instance->postPaymentInstrument($requestObj);
-        $instrumentId = $apiResponse[0]->getId();
-        var_dump("Payment instrument identifier: {$instrumentId}");
-        print_r(PHP_EOL);
-        print_r($apiResponse);
-
-        WriteLogAudit($apiResponse[1]);
-        CreateCustomer($instrumentId);
-        return $apiResponse;
-    } catch (Cybersource\ApiException $e) {
-        print_r($e->getResponseBody());
-        print_r($e->getMessage());
-        $errorCode = $e->getCode();
-        WriteLogAudit($errorCode);
-    }
-}
-
-function CreateCustomer(string $paymentInstrumentId)
-{
     $merchantCustomerId = Uuid::uuid4()->toString();
     var_dump("merchantCustomerId - $merchantCustomerId");
     $buyerInformationArr = [
@@ -100,8 +37,6 @@ function CreateCustomer(string $paymentInstrumentId)
         "merchantDefinedInformation" => $merchantDefinedInformation,
     ];
     $requestObj = new CyberSource\Model\PostCustomerRequest($requestObjArr);
-
-
     $commonElement = new CyberSource\ExternalConfiguration();
     $config = $commonElement->ConnectionHost();
     $merchantConfig = $commonElement->merchantConfigObject();
@@ -114,13 +49,8 @@ function CreateCustomer(string $paymentInstrumentId)
         $apiResponse = $api_instance->postCustomer($requestObj);
         $customerId = $apiResponse[0]->getId();
         var_dump("Customer id: {$customerId}");
-        UpdateCustomersDefaultPaymentInstrument($customerId, $paymentInstrumentId);
+        CreateCustomerDefaultPaymentInstrumentCard($customerId, $instrumentIdentifierId);
         PurchaseWithCustomerTokenId($customerId);
-        print_r(PHP_EOL);
-        print_r($apiResponse);
-
-        WriteLogAudit($apiResponse[1]);
-        return $apiResponse;
     } catch (Cybersource\ApiException $e) {
         print_r($e->getResponseBody());
         print_r($e->getMessage());
@@ -182,11 +112,9 @@ function PurchaseWithCustomerTokenId(string $customerId)
     $api_instance = new CyberSource\Api\PaymentsApi($api_client);
 
     try {
+        /** @var array{PtsV2PaymentsPost201Response, string, array<string,string>} $apiResponse */
         $apiResponse = $api_instance->createPayment($requestObj);
-        print_r(PHP_EOL);
-        print_r($apiResponse);
-
-        WriteLogAudit($apiResponse[1]);
+        var_dump("Payment ID: {$apiResponse[0]->getId()}");
         return $apiResponse;
     } catch (Cybersource\ApiException $e) {
         print_r($e->getResponseBody());
@@ -196,32 +124,58 @@ function PurchaseWithCustomerTokenId(string $customerId)
     }
 }
 
-function UpdateCustomersDefaultPaymentInstrument(string $customerTokenId, string $paymentInstrumentId)
+/**
+ * @param string $customerTokenId
+ * @param string $instrumentIdentifierId
+ * @return array{Tmsv2customersEmbeddedDefaultPaymentInstrument, string, array<string,string>}
+ */
+function CreateCustomerDefaultPaymentInstrumentCard(string $customerTokenId, string $instrumentIdentifierId)
 {
-    $defaultPaymentInstrumentArr = [
-        "id" => $paymentInstrumentId
+    $cardArr = [
+        "expirationMonth" => "12",
+        "expirationYear" => "2031",
+        "type" => "001"
     ];
-    $defaultPaymentInstrument = new CyberSource\Model\Tmsv2customersDefaultPaymentInstrument($defaultPaymentInstrumentArr);
+    $card = new CyberSource\Model\Tmsv2customersEmbeddedDefaultPaymentInstrumentCard($cardArr);
+
+    $billToArr = [
+        "firstName" => "John",
+        "lastName" => "Doe",
+        "company" => "CyberSource",
+        "address1" => "1 Market St",
+        "locality" => "San Francisco",
+        "administrativeArea" => "CA",
+        "postalCode" => "94105",
+        "country" => "US",
+        "email" => "test@cybs.com",
+        "phoneNumber" => "4158880000"
+    ];
+    $billTo = new CyberSource\Model\Tmsv2customersEmbeddedDefaultPaymentInstrumentBillTo($billToArr);
+
+    $instrumentIdentifierArr = [
+        "id" => $instrumentIdentifierId
+    ];
+    $instrumentIdentifier = new CyberSource\Model\Tmsv2customersEmbeddedDefaultPaymentInstrumentInstrumentIdentifier($instrumentIdentifierArr);
 
     $requestObjArr = [
-        "defaultPaymentInstrument" => $defaultPaymentInstrument
+        "_default" => true,
+        "card" => $card,
+        "billTo" => $billTo,
+        "instrumentIdentifier" => $instrumentIdentifier
     ];
-    $requestObj = new CyberSource\Model\PatchCustomerRequest($requestObjArr);
-
+    $requestObj = new CyberSource\Model\PostCustomerPaymentInstrumentRequest($requestObjArr);
 
     $commonElement = new CyberSource\ExternalConfiguration();
     $config = $commonElement->ConnectionHost();
     $merchantConfig = $commonElement->merchantConfigObject();
 
     $api_client = new CyberSource\ApiClient($config, $merchantConfig);
-    $api_instance = new CyberSource\Api\CustomerApi($api_client);
+    $api_instance = new CyberSource\Api\CustomerPaymentInstrumentApi($api_client);
 
     try {
-        $apiResponse = $api_instance->patchCustomer($customerTokenId, $requestObj, null, null);
-        print_r(PHP_EOL);
-        print_r($apiResponse);
-
-        WriteLogAudit($apiResponse[1]);
+        /** @var array{Tmsv2customersEmbeddedDefaultPaymentInstrument, string, array<string,string>} $apiResponse */
+        $apiResponse = $api_instance->postCustomerPaymentInstrument($customerTokenId, $requestObj, null);
+        var_dump("Payment Instrument created: {$apiResponse[0]->getId()}");
         return $apiResponse;
     } catch (Cybersource\ApiException $e) {
         print_r($e->getResponseBody());
@@ -232,8 +186,9 @@ function UpdateCustomersDefaultPaymentInstrument(string $customerTokenId, string
 }
 
 
-
-
+/**
+ * @return array{\CyberSource\Model\Tmsv2customersEmbeddedDefaultPaymentInstrumentEmbeddedInstrumentIdentifier, string,array<string,string> }
+ */
 function CreateInstrumentIdentifierCard()
 {
     $cardArr = [
@@ -254,11 +209,9 @@ function CreateInstrumentIdentifierCard()
     $api_instance = new CyberSource\Api\InstrumentIdentifierApi($api_client);
 
     try {
+        /** @var array{\CyberSource\Model\Tmsv2customersEmbeddedDefaultPaymentInstrumentEmbeddedInstrumentIdentifier, string,array<string,string> } $apiResponse */
         $apiResponse = $api_instance->postInstrumentIdentifier($requestObj);
-        print_r(PHP_EOL);
-        print_r($apiResponse);
-
-        WriteLogAudit($apiResponse[1]);
+        var_dump("Instrument Identifier created. ID: {$apiResponse[0]->getId()}");
         return $apiResponse;
     } catch (Cybersource\ApiException $e) {
         print_r($e->getResponseBody());
@@ -269,17 +222,16 @@ function CreateInstrumentIdentifierCard()
 }
 
 
-
-
-if (!function_exists('WriteLogAudit')){
-    function WriteLogAudit($status){
+if (!function_exists('WriteLogAudit')) {
+    function WriteLogAudit($status)
+    {
         $sampleCode = basename(__FILE__, '.php');
         print_r("\n[Sample Code Testing] [$sampleCode] $status");
     }
 }
 
-if(!defined('DO_NOT_RUN_SAMPLES')){
+if (!defined('DO_NOT_RUN_SAMPLES')) {
     echo "\nCreatePaymentInstrumentCard Sample Code is Running..." . PHP_EOL;
-    CreatePaymentInstrumentCard();
+    run();
 }
 ?>
